@@ -1,0 +1,8 @@
+repomix-output.xml
+repomix-output.txt
+node_modules/
+dist/
+coverage/
+.vscode/
+.idea/
+.DS_Store   
