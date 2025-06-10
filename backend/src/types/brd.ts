@@ -56,3 +56,8 @@ export type BRDCreatePayload = z.infer<typeof BRDCreatePayloadSchema>;
 
 export const BRDUpdatePayloadSchema = BRDCreatePayloadSchema.partial();
 export type BRDUpdatePayload = z.infer<typeof BRDUpdatePayloadSchema>;
+
+export const BRDTextCreatePayloadSchema = z.object({
+  businessInfo: z.string().min(1, "Business information cannot be empty"),
+});
+export type BRDTextCreatePayload = z.infer<typeof BRDTextCreatePayloadSchema>;

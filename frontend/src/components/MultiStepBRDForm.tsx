@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, ChangeEvent, FormEvent } from "react";
 import axios from "axios";
 import {
   BRDCreatePayload,
@@ -10,12 +10,21 @@ import {
   DataModelCreateFormSchema,
   createDataModelWithId,
   AuthenticationTypeSchema,
-  CoreFeature,
-  DataModel,
+  TechnologyStack, // Added for explicit typing
 } from "../schemas";
 import { FormInput } from "./FormInput";
 import { FormTextarea } from "./FormTextarea";
 import { FormSelect } from "./FormSelect";
+import LoadingSpinner from "./common/LoadingSpinner"; // Make sure this path is correct
+import { BRDFromTextGenerator } from "./BRDFromTextGenerator";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "./common/Card";
+import { Button } from "./common/Button";
 
 type FormErrors = Partial<Record<keyof BRDCreatePayload | string, string>>;
 
@@ -59,9 +68,7 @@ const DetailItem: React.FC<{ label: string; value?: React.ReactNode }> = ({
     value === null ||
     (typeof value === "string" && value.trim() === "")
   ) {
-    // Don't render if value is essentially empty, or handle as "N/A"
-    // return <div className="mb-2"><span className="font-semibold">{label}: </span><span className="text-slate-500">N/A</span></div>;
-    return null; // Or render N/A as above if preferred for all items
+    return null;
   }
   return (
     <div className="mb-3">
@@ -101,9 +108,7 @@ const ImprovedBRDDisplay: React.FC<{ data: BRDCreatePayload }> = ({ data }) => {
       <div>
         <SectionTitle>Technology Stack</SectionTitle>
         {(
-          Object.keys(data.technologyStack) as Array<
-            keyof typeof data.technologyStack
-          >
+          Object.keys(data.technologyStack) as Array<keyof TechnologyStack>
         ).map(
           (category) =>
             data.technologyStack[category] &&
@@ -115,7 +120,10 @@ const ImprovedBRDDisplay: React.FC<{ data: BRDCreatePayload }> = ({ data }) => {
                 <ul className="list-disc list-inside ml-4 space-y-1">
                   {data.technologyStack[category].map(
                     (tech: string, index: number) => (
-                      <li key={index} className="text-slate-600">
+                      <li
+                        key={`${category}-${index}`}
+                        className="text-slate-600"
+                      >
                         {tech}
                       </li>
                     )
@@ -132,64 +140,54 @@ const ImprovedBRDDisplay: React.FC<{ data: BRDCreatePayload }> = ({ data }) => {
       {data.coreFeatures && data.coreFeatures.length > 0 && (
         <div>
           <SectionTitle>Core Features</SectionTitle>
-          {data.coreFeatures.map(
-            (
-              feature: CoreFeature,
-              index: number // Assuming CoreFeature type is imported
-            ) => (
-              <div
-                key={feature.id || index}
-                className="mb-4 p-4 border border-slate-200 rounded-lg shadow-sm bg-white"
-              >
-                <SubSectionTitle>
-                  {feature.name}{" "}
-                  <span className="ml-2 text-xs font-semibold bg-sky-100 text-sky-700 px-2 py-1 rounded-full align-middle">
-                    Priority: {feature.priority}
-                  </span>
-                </SubSectionTitle>
-                <p className="text-slate-600 whitespace-pre-wrap">
-                  {feature.description}
-                </p>
-              </div>
-            )
-          )}
+          {data.coreFeatures.map((feature: CoreFeature, index: number) => (
+            <div
+              key={feature.id || index}
+              className="mb-4 p-4 border border-slate-200 rounded-lg shadow-sm bg-white"
+            >
+              <SubSectionTitle>
+                {feature.name}{" "}
+                <span className="ml-2 text-xs font-semibold bg-sky-100 text-sky-700 px-2 py-1 rounded-full align-middle">
+                  Priority: {feature.priority}
+                </span>
+              </SubSectionTitle>
+              <p className="text-slate-600 whitespace-pre-wrap">
+                {feature.description}
+              </p>
+            </div>
+          ))}
         </div>
       )}
 
       {data.dataModels && data.dataModels.length > 0 && (
         <div>
           <SectionTitle>Data Models</SectionTitle>
-          {data.dataModels.map(
-            (
-              model: DataModel,
-              index: number // Assuming DataModel type is imported
-            ) => (
-              <div
-                key={model.id || index}
-                className="mb-4 p-4 border border-slate-200 rounded-lg shadow-sm bg-white"
-              >
-                <SubSectionTitle>{model.name}</SubSectionTitle>
+          {data.dataModels.map((model: DataModel, index: number) => (
+            <div
+              key={model.id || index}
+              className="mb-4 p-4 border border-slate-200 rounded-lg shadow-sm bg-white"
+            >
+              <SubSectionTitle>{model.name}</SubSectionTitle>
+              <DetailItem
+                label="Fields"
+                value={
+                  <pre className="bg-slate-100 p-3 rounded text-sm whitespace-pre-wrap text-slate-700">
+                    {model.fields || "N/A"}
+                  </pre>
+                }
+              />
+              {model.relationships && (
                 <DetailItem
-                  label="Fields"
+                  label="Relationships"
                   value={
                     <pre className="bg-slate-100 p-3 rounded text-sm whitespace-pre-wrap text-slate-700">
-                      {model.fields || "N/A"}
+                      {model.relationships}
                     </pre>
                   }
                 />
-                {model.relationships && (
-                  <DetailItem
-                    label="Relationships"
-                    value={
-                      <pre className="bg-slate-100 p-3 rounded text-sm whitespace-pre-wrap text-slate-700">
-                        {model.relationships}
-                      </pre>
-                    }
-                  />
-                )}
-              </div>
-            )
-          )}
+              )}
+            </div>
+          ))}
         </div>
       )}
 
@@ -207,7 +205,7 @@ const ImprovedBRDDisplay: React.FC<{ data: BRDCreatePayload }> = ({ data }) => {
             <SubSectionTitle>API Requirements</SubSectionTitle>
             <ul className="list-disc list-inside ml-4 space-y-1">
               {data.apiRequirements.map((req: string, index: number) => (
-                <li key={index} className="text-slate-600">
+                <li key={`api-req-${index}`} className="text-slate-600">
                   {req}
                 </li>
               ))}
@@ -238,6 +236,7 @@ const ImprovedBRDDisplay: React.FC<{ data: BRDCreatePayload }> = ({ data }) => {
 
 // --- Main Form Component ---
 const MultiStepBRDForm: React.FC = () => {
+  const [creationMode, setCreationMode] = useState<"form" | "text">("form");
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<BRDCreatePayload>(initialFormData);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -248,12 +247,26 @@ const MultiStepBRDForm: React.FC = () => {
   const [improvedBRDData, setImprovedBRDData] =
     useState<BRDCreatePayload | null>(null);
 
+  // State for Repository Generation
+  const [repoGenerationStatus, setRepoGenerationStatus] = useState<
+    "idle" | "generating" | "success" | "error"
+  >("idle");
+  const [repoGenerationMessage, setRepoGenerationMessage] =
+    useState<string>("");
+
+  const onBrdGenerated = (brdData: any) => {
+    console.log("BRD Generated:", brdData);
+    setImprovedBRDData(brdData);
+    setFormData(brdData); // Populate form data
+    setSubmissionStatus("success");
+    setSubmissionMessage("BRD generated from text and populated in the form below for review.");
+    setCreationMode("form"); // Switch to form to show populated data
+  };
+  
   const totalSteps = 6;
 
   const handleInputChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -263,28 +276,21 @@ const MultiStepBRDForm: React.FC = () => {
   };
 
   const handleTechStackChange = (
-    category: keyof BRDCreatePayload["technologyStack"],
+    category: keyof TechnologyStack,
     values: string[]
   ) => {
     setFormData((prev) => ({
       ...prev,
-      technologyStack: {
-        ...prev.technologyStack,
-        [category]: values,
-      },
+      technologyStack: { ...prev.technologyStack, [category]: values },
     }));
   };
 
   const nextStep = () => {
-    if (currentStep < totalSteps) {
-      setCurrentStep((prev) => prev + 1);
-    }
+    if (currentStep < totalSteps) setCurrentStep((prev) => prev + 1);
   };
 
   const prevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep((prev) => prev - 1);
-    }
+    if (currentStep > 1) setCurrentStep((prev) => prev - 1);
   };
 
   const handleResetForm = () => {
@@ -294,6 +300,8 @@ const MultiStepBRDForm: React.FC = () => {
     setSubmissionStatus("idle");
     setSubmissionMessage("");
     setImprovedBRDData(null);
+    setRepoGenerationStatus("idle");
+    setRepoGenerationMessage("");
 
     setCurrentCoreFeature({ name: "", description: "", priority: "Medium" });
     setCoreFeatureErrors({});
@@ -302,15 +310,17 @@ const MultiStepBRDForm: React.FC = () => {
     setCurrentApiReq("");
     setCurrentFrontendTech("");
     setCurrentBackendTech("");
-    // setCurrentDatabaseTech(""); // If implemented
-    // setCurrentOtherTech(""); // If implemented
+    setCurrentDatabaseTech("");
+    setCurrentOtherTech("");
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setErrors({});
     setSubmissionStatus("submitting");
     setSubmissionMessage("");
+    setRepoGenerationStatus("idle"); // Reset repo generation status for new BRD submission
+    setRepoGenerationMessage("");
 
     const result = BRDCreatePayloadSchema.safeParse(formData);
     if (!result.success) {
@@ -323,8 +333,7 @@ const MultiStepBRDForm: React.FC = () => {
       setSubmissionStatus("error");
       setSubmissionMessage("Please correct the errors in the form.");
       console.error("Validation Errors:", newErrors);
-      // Find the first step with an error and navigate to it
-      // This is a simplified approach; a more robust solution would map error paths to steps
+      // Navigate to first step with error
       if (newErrors.projectName || newErrors.projectDescription)
         setCurrentStep(1);
       else if (
@@ -340,35 +349,36 @@ const MultiStepBRDForm: React.FC = () => {
         Object.keys(newErrors).some((k) => k.startsWith("apiRequirements"))
       )
         setCurrentStep(5);
-      else setCurrentStep(totalSteps); // Default to last step for other errors or if logic is complex
+      else setCurrentStep(totalSteps);
       return;
     }
 
     try {
       const response = await axios.post(
-        "http://localhost:3001/api/brd",
+        "http://localhost:3001/api/brds",
         result.data
-      );
-      console.log("Server Response:", response.data);
+      ); // Ensure API URL is correct
+      console.log("Server Response (BRD Enhancement):", response.data);
       setSubmissionStatus("success");
       setSubmissionMessage(
         "BRD submitted successfully! The enriched version is displayed below."
       );
-      setImprovedBRDData(response.data.data);
+      setImprovedBRDData(response.data.data as BRDCreatePayload);
     } catch (error) {
       console.error("Submission Error:", error);
       setSubmissionStatus("error");
       if (axios.isAxiosError(error) && error.response) {
-        // Check if error.response.data.errors is the Zod flattened errors
         if (error.response.data.errors) {
           const backendErrors: FormErrors = {};
           for (const field in error.response.data.errors) {
-            backendErrors[field] = error.response.data.errors[field].join(", ");
+            backendErrors[field] = (
+              error.response.data.errors[field] as string[]
+            ).join(", ");
           }
           setErrors(backendErrors);
           setSubmissionMessage(
             error.response.data.message ||
-              "Submission failed due to validation errors from server."
+              "Submission failed due to server validation errors."
           );
         } else {
           setSubmissionMessage(
@@ -383,6 +393,40 @@ const MultiStepBRDForm: React.FC = () => {
     }
   };
 
+  const handleGenerateRepo = async () => {
+    if (!improvedBRDData) {
+      setRepoGenerationMessage("No BRD data available to generate repository.");
+      setRepoGenerationStatus("error");
+      return;
+    }
+    setRepoGenerationStatus("generating");
+    setRepoGenerationMessage("");
+    try {
+      const response = await axios.post(
+        "http://localhost:3001/api/brds/generate-repo",
+        improvedBRDData
+      );
+      setRepoGenerationStatus("success");
+      setRepoGenerationMessage(
+        response.data.message +
+          (response.data.path ? ` (Server path: ${response.data.path})` : "")
+      );
+      console.log("Repo Generation Response:", response.data);
+    } catch (error) {
+      console.error("Repository Generation Error:", error);
+      setRepoGenerationStatus("error");
+      if (axios.isAxiosError(error) && error.response) {
+        setRepoGenerationMessage(
+          `Repo generation failed: ${
+            error.response.data.message || "Server error"
+          }`
+        );
+      } else {
+        setRepoGenerationMessage("Repo generation failed. Please try again.");
+      }
+    }
+  };
+
   // --- Core Features Management ---
   const [currentCoreFeature, setCurrentCoreFeature] =
     useState<CoreFeatureCreateForm>({
@@ -393,19 +437,14 @@ const MultiStepBRDForm: React.FC = () => {
   const [coreFeatureErrors, setCoreFeatureErrors] = useState<
     Partial<Record<keyof CoreFeatureCreateForm, string>>
   >({});
-
   const handleCoreFeatureInputChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     setCurrentCoreFeature((prev) => ({ ...prev, [name]: value }));
-    if (coreFeatureErrors[name as keyof CoreFeatureCreateForm]) {
+    if (coreFeatureErrors[name as keyof CoreFeatureCreateForm])
       setCoreFeatureErrors((prev) => ({ ...prev, [name]: undefined }));
-    }
   };
-
   const addCoreFeature = () => {
     const result = CoreFeatureCreateFormSchema.safeParse(currentCoreFeature);
     if (!result.success) {
@@ -419,18 +458,59 @@ const MultiStepBRDForm: React.FC = () => {
       return;
     }
     setCoreFeatureErrors({});
-    const newFeature = createCoreFeatureWithId(result.data);
     setFormData((prev) => ({
       ...prev,
-      coreFeatures: [...prev.coreFeatures, newFeature],
+      coreFeatures: [
+        ...prev.coreFeatures,
+        createCoreFeatureWithId(result.data),
+      ],
     }));
     setCurrentCoreFeature({ name: "", description: "", priority: "Medium" });
   };
-
   const removeCoreFeature = (id: string) => {
     setFormData((prev) => ({
       ...prev,
       coreFeatures: prev.coreFeatures.filter((cf) => cf.id !== id),
+    }));
+  };
+
+  // --- Data Model Management ---
+  const [currentDataModel, setCurrentDataModel] = useState<DataModelCreateForm>(
+    { name: "", fields: "", relationships: "" }
+  );
+  const [dataModelErrors, setDataModelErrors] = useState<
+    Partial<Record<keyof DataModelCreateForm, string>>
+  >({});
+  const handleDataModelInputChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setCurrentDataModel((prev) => ({ ...prev, [name]: value }));
+    if (dataModelErrors[name as keyof DataModelCreateForm])
+      setDataModelErrors((prev) => ({ ...prev, [name]: undefined }));
+  };
+  const addDataModel = () => {
+    const result = DataModelCreateFormSchema.safeParse(currentDataModel);
+    if (!result.success) {
+      const newErrors: Partial<Record<keyof DataModelCreateForm, string>> = {};
+      result.error.errors.forEach(
+        (err) =>
+          (newErrors[err.path[0] as keyof DataModelCreateForm] = err.message)
+      );
+      setDataModelErrors(newErrors);
+      return;
+    }
+    setDataModelErrors({});
+    setFormData((prev) => ({
+      ...prev,
+      dataModels: [...prev.dataModels, createDataModelWithId(result.data)],
+    }));
+    setCurrentDataModel({ name: "", fields: "", relationships: "" });
+  };
+  const removeDataModel = (id: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      dataModels: prev.dataModels.filter((dm) => dm.id !== id),
     }));
   };
 
@@ -453,82 +533,82 @@ const MultiStepBRDForm: React.FC = () => {
 
   // --- Tech Stack Item Management ---
   const [currentFrontendTech, setCurrentFrontendTech] = useState("");
-  const addFrontendTech = () => {
-    if (currentFrontendTech.trim() === "") return;
-    handleTechStackChange("frontend", [
-      ...formData.technologyStack.frontend,
-      currentFrontendTech.trim(),
-    ]);
-    setCurrentFrontendTech("");
-  };
-  const removeFrontendTech = (index: number) => {
-    handleTechStackChange(
-      "frontend",
-      formData.technologyStack.frontend.filter((_, i) => i !== index)
-    );
-  };
-
   const [currentBackendTech, setCurrentBackendTech] = useState("");
-  const addBackendTech = () => {
-    if (currentBackendTech.trim() === "") return;
-    handleTechStackChange("backend", [
-      ...formData.technologyStack.backend,
-      currentBackendTech.trim(),
+  const [currentDatabaseTech, setCurrentDatabaseTech] = useState("");
+  const [currentOtherTech, setCurrentOtherTech] = useState("");
+
+  const addTechItem = (
+    category: keyof TechnologyStack,
+    item: string,
+    setItem: React.Dispatch<React.SetStateAction<string>>
+  ) => {
+    if (item.trim() === "") return;
+    handleTechStackChange(category, [
+      ...formData.technologyStack[category],
+      item.trim(),
     ]);
-    setCurrentBackendTech("");
+    setItem("");
   };
-  const removeBackendTech = (index: number) => {
+  const removeTechItem = (category: keyof TechnologyStack, index: number) => {
     handleTechStackChange(
-      "backend",
-      formData.technologyStack.backend.filter((_, i) => i !== index)
+      category,
+      formData.technologyStack[category].filter((_, i) => i !== index)
     );
   };
-  // TODO: Repeat for database, other tech stack categories
 
-  // --- Data Model Management ---
-  const [currentDataModel, setCurrentDataModel] = useState<DataModelCreateForm>(
-    { name: "", fields: "", relationships: "" }
+  // Helper for rendering tech stack section
+  const renderTechStackCategory = (
+    categoryName: string,
+    categoryKey: keyof TechnologyStack,
+    currentItem: string,
+    setCurrentItem: React.Dispatch<React.SetStateAction<string>>,
+    placeholder: string
+  ) => (
+    <div className="mb-4 p-3 border border-slate-200 rounded">
+      <h3 className="font-medium mb-2">{categoryName}</h3>
+      {formData.technologyStack[categoryKey].map((tech, index) => (
+        <div key={`${categoryKey}-${index}`} className="flex items-center mb-1">
+          <span className="flex-grow text-sm">{tech}</span>
+          <button
+            type="button"
+            onClick={() => removeTechItem(categoryKey, index)}
+            className="ml-2 text-red-500 hover:text-red-700 text-xs"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      {formData.technologyStack[categoryKey].length === 0 && (
+        <p className="text-xs text-slate-400 italic">
+          No {categoryName.toLowerCase()} added.
+        </p>
+      )}
+      <div className="flex items-end mt-2">
+        <FormInput
+          label=""
+          id={`current${categoryKey}Tech`}
+          name={`current${categoryKey}Tech`}
+          value={currentItem}
+          onChange={(e) => setCurrentItem(e.target.value)}
+          placeholder={placeholder}
+          // error={errors[`technologyStack.${categoryKey}`]} // This error is for the array as a whole, per Zod. Individual item errors aren't typical here.
+          className="mb-0" // Remove default bottom margin from FormInput
+        />
+        <button
+          type="button"
+          onClick={() => addTechItem(categoryKey, currentItem, setCurrentItem)}
+          className="ml-2 px-3 py-2 bg-sky-500 text-white rounded hover:bg-sky-600 whitespace-nowrap text-sm h-[38px]"
+        >
+          Add Tech
+        </button>
+      </div>
+      {errors[`technologyStack.${categoryKey}`] && (
+        <p className="mt-1 text-xs text-red-600">
+          {errors[`technologyStack.${categoryKey}`]}
+        </p>
+      )}
+    </div>
   );
-  const [dataModelErrors, setDataModelErrors] = useState<
-    Partial<Record<keyof DataModelCreateForm, string>>
-  >({});
-
-  const handleDataModelInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setCurrentDataModel((prev) => ({ ...prev, [name]: value }));
-    if (dataModelErrors[name as keyof DataModelCreateForm]) {
-      setDataModelErrors((prev) => ({ ...prev, [name]: undefined }));
-    }
-  };
-
-  const addDataModel = () => {
-    const result = DataModelCreateFormSchema.safeParse(currentDataModel);
-    if (!result.success) {
-      const newErrors: Partial<Record<keyof DataModelCreateForm, string>> = {};
-      result.error.errors.forEach(
-        (err) =>
-          (newErrors[err.path[0] as keyof DataModelCreateForm] = err.message)
-      );
-      setDataModelErrors(newErrors);
-      return;
-    }
-    setDataModelErrors({});
-    const newDm = createDataModelWithId(result.data);
-    setFormData((prev) => ({
-      ...prev,
-      dataModels: [...prev.dataModels, newDm],
-    }));
-    setCurrentDataModel({ name: "", fields: "", relationships: "" });
-  };
-
-  const removeDataModel = (id: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      dataModels: prev.dataModels.filter((dm) => dm.id !== id),
-    }));
-  };
 
   const renderStep = () => {
     switch (currentStep) {
@@ -564,111 +644,43 @@ const MultiStepBRDForm: React.FC = () => {
             <h2 className="text-xl font-semibold mb-4">
               Step 2: Technology Stack
             </h2>
-            {/* Frontend */}
-            <div className="mb-4 p-3 border border-slate-200 rounded">
-              <h3 className="font-medium mb-2">Frontend Technologies</h3>
-              {formData.technologyStack.frontend.map((tech, index) => (
-                <div
-                  key={`frontend-${index}`}
-                  className="flex items-center mb-1"
-                >
-                  <span className="flex-grow">{tech}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeFrontendTech(index)}
-                    className="ml-2 text-red-500 hover:text-red-700 text-xs"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-              {formData.technologyStack.frontend.length === 0 && (
-                <p className="text-xs text-slate-400 italic">
-                  No frontend technologies added.
-                </p>
-              )}
-              <div className="flex items-center mt-2">
-                <FormInput
-                  label=""
-                  id="currentFrontendTech"
-                  name="currentFrontendTech"
-                  value={currentFrontendTech}
-                  onChange={(e) => setCurrentFrontendTech(e.target.value)}
-                  placeholder="e.g., React"
-                  error={errors["technologyStack.frontend"]}
-                />
-                <button
-                  type="button"
-                  onClick={addFrontendTech}
-                  className="ml-2 px-3 py-2 bg-sky-500 text-white rounded hover:bg-sky-600 whitespace-nowrap text-sm"
-                >
-                  Add Tech
-                </button>
-              </div>
-              {errors["technologyStack.frontend"] && (
-                <p className="mt-1 text-xs text-red-600">
-                  {errors["technologyStack.frontend"]}
-                </p>
-              )}
-            </div>
-
-            {/* Backend */}
-            <div className="mb-4 p-3 border border-slate-200 rounded">
-              <h3 className="font-medium mb-2">Backend Technologies</h3>
-              {formData.technologyStack.backend.map((tech, index) => (
-                <div
-                  key={`backend-${index}`}
-                  className="flex items-center mb-1"
-                >
-                  <span className="flex-grow">{tech}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeBackendTech(index)}
-                    className="ml-2 text-red-500 hover:text-red-700 text-xs"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-              {formData.technologyStack.backend.length === 0 && (
-                <p className="text-xs text-slate-400 italic">
-                  No backend technologies added.
-                </p>
-              )}
-              <div className="flex items-center mt-2">
-                <FormInput
-                  label=""
-                  id="currentBackendTech"
-                  name="currentBackendTech"
-                  value={currentBackendTech}
-                  onChange={(e) => setCurrentBackendTech(e.target.value)}
-                  placeholder="e.g., Node.js"
-                  error={errors["technologyStack.backend"]}
-                />
-                <button
-                  type="button"
-                  onClick={addBackendTech}
-                  className="ml-2 px-3 py-2 bg-sky-500 text-white rounded hover:bg-sky-600 whitespace-nowrap text-sm"
-                >
-                  Add Tech
-                </button>
-              </div>
-              {errors["technologyStack.backend"] && (
-                <p className="mt-1 text-xs text-red-600">
-                  {errors["technologyStack.backend"]}
-                </p>
-              )}
-            </div>
-            {/* TODO: Implement UI for Database and Other technology stack categories similarly */}
-            <p className="text-xs text-slate-500 mb-4">
-              Note: Add at least one for frontend, backend, database (as per
-              schema, if refined).
-            </p>
-            {errors["technologyStack"] && ( // General error for the whole stack object
+            {renderTechStackCategory(
+              "Frontend Technologies",
+              "frontend",
+              currentFrontendTech,
+              setCurrentFrontendTech,
+              "e.g., React, Vue"
+            )}
+            {renderTechStackCategory(
+              "Backend Technologies",
+              "backend",
+              currentBackendTech,
+              setCurrentBackendTech,
+              "e.g., Node.js, Python (Django)"
+            )}
+            {renderTechStackCategory(
+              "Database Technologies",
+              "database",
+              currentDatabaseTech,
+              setCurrentDatabaseTech,
+              "e.g., PostgreSQL, MongoDB"
+            )}
+            {renderTechStackCategory(
+              "Other Technologies/Tools",
+              "other",
+              currentOtherTech,
+              setCurrentOtherTech,
+              "e.g., Docker, AWS S3"
+            )}
+            {errors["technologyStack"] && (
               <p className="mt-1 text-xs text-red-600">
                 {errors["technologyStack"]}
               </p>
             )}
+            <p className="text-xs text-slate-500 mt-2">
+              Note: The schema may require at least one item for some
+              categories.
+            </p>
           </div>
         );
       case 3: // Core Features
@@ -721,7 +733,7 @@ const MultiStepBRDForm: React.FC = () => {
             </h3>
             {formData.coreFeatures.length === 0 && (
               <p className="text-sm text-slate-500">
-                No core features added yet. Add at least one.
+                No core features added yet. Schema requires at least one.
               </p>
             )}
             {formData.coreFeatures.map((feature) => (
@@ -798,7 +810,7 @@ const MultiStepBRDForm: React.FC = () => {
             </h3>
             {formData.dataModels.length === 0 && (
               <p className="text-sm text-slate-500">
-                No data models added yet. Add at least one.
+                No data models added yet. Schema requires at least one.
               </p>
             )}
             {formData.dataModels.map((dm) => (
@@ -843,8 +855,7 @@ const MultiStepBRDForm: React.FC = () => {
               name="authentication"
               value={formData.authentication}
               onChange={handleInputChange}
-              options={AuthenticationTypeSchema.options.map((opt: string) => ({
-                // Ensure 'opt' is string
+              options={AuthenticationTypeSchema.options.map((opt) => ({
                 value: opt,
                 label: opt.charAt(0).toUpperCase() + opt.slice(1),
               }))}
@@ -855,7 +866,7 @@ const MultiStepBRDForm: React.FC = () => {
               <h3 className="font-medium mb-2">API Requirements</h3>
               {formData.apiRequirements.map((req, index) => (
                 <div key={`api-${index}`} className="flex items-center mb-1">
-                  <span className="flex-grow">{req}</span>
+                  <span className="flex-grow text-sm">{req}</span>
                   <button
                     type="button"
                     onClick={() => removeApiRequirement(index)}
@@ -867,10 +878,10 @@ const MultiStepBRDForm: React.FC = () => {
               ))}
               {formData.apiRequirements.length === 0 && (
                 <p className="text-xs text-slate-400 italic">
-                  No API requirements added. Add at least one.
+                  No API requirements added. Schema requires at least one.
                 </p>
               )}
-              <div className="flex items-center mt-2">
+              <div className="flex items-end mt-2">
                 <FormInput
                   label=""
                   id="currentApiReq"
@@ -878,11 +889,12 @@ const MultiStepBRDForm: React.FC = () => {
                   value={currentApiReq}
                   onChange={(e) => setCurrentApiReq(e.target.value)}
                   placeholder="e.g., GET /users/:id"
+                  className="mb-0"
                 />
                 <button
                   type="button"
                   onClick={addApiRequirement}
-                  className="ml-2 px-3 py-2 bg-sky-500 text-white rounded hover:bg-sky-600 whitespace-nowrap text-sm"
+                  className="ml-2 px-3 py-2 bg-sky-500 text-white rounded hover:bg-sky-600 whitespace-nowrap text-sm h-[38px]"
                 >
                   Add API
                 </button>
@@ -916,30 +928,43 @@ const MultiStepBRDForm: React.FC = () => {
               error={errors["additionalRequirements"]}
             />
             {submissionStatus === "submitting" && (
-              <p className="text-sky-600 mt-4">Submitting...</p>
+              <div className="flex items-center justify-center text-sky-600 mt-4">
+                <LoadingSpinner />
+                <span className="ml-2">
+                  Submitting BRD for AI enhancement...
+                </span>
+              </div>
             )}
-            {submissionStatus === "error" && (
+            {submissionStatus === "error" &&
+              !Object.keys(errors).length && ( // Show general submission message if no specific field errors
+                <div className="my-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                  <p className="font-bold">Submission Error</p>
+                  <p>{submissionMessage}</p>
+                </div>
+              )}
+            {Object.keys(errors).length > 0 && submissionStatus === "error" && (
               <div className="my-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-                <p className="font-bold mb-1">{submissionMessage}</p>
-                {Object.keys(errors).length > 0 && (
-                  <ul className="list-disc list-inside text-sm">
-                    {Object.entries(errors).map(
-                      ([key, message]) =>
-                        message && (
-                          <li key={key}>
-                            <strong>
-                              {key
-                                .replace(/\./g, " -> ")
-                                .replace(/([A-Z])/g, " $1")
-                                .trim()}
-                              :
-                            </strong>{" "}
-                            {message}
-                          </li>
-                        )
-                    )}
-                  </ul>
-                )}
+                <p className="font-bold mb-1">
+                  {submissionMessage ||
+                    "Please correct the highlighted errors:"}
+                </p>
+                <ul className="list-disc list-inside text-sm">
+                  {Object.entries(errors).map(
+                    ([key, message]) =>
+                      message && (
+                        <li key={key}>
+                          <strong>
+                            {key
+                              .replace(/\./g, " -> ")
+                              .replace(/([A-Z])/g, " $1")
+                              .trim()}
+                            :
+                          </strong>{" "}
+                          {message}
+                        </li>
+                      )
+                  )}
+                </ul>
               </div>
             )}
           </div>
@@ -949,7 +974,6 @@ const MultiStepBRDForm: React.FC = () => {
     }
   };
 
-  // If submission was successful and we have improved data, show it.
   if (submissionStatus === "success" && improvedBRDData) {
     return (
       <div className="max-w-3xl mx-auto p-6 sm:p-8 bg-white shadow-xl rounded-lg my-10">
@@ -960,6 +984,57 @@ const MultiStepBRDForm: React.FC = () => {
           <p className="mb-6 text-green-600">{submissionMessage}</p>
         )}
         <ImprovedBRDDisplay data={improvedBRDData} />
+
+        <div className="mt-8 pt-6 border-t border-slate-300">
+          <h2 className="text-2xl font-semibold mb-4 text-sky-700">
+            Generate Project Files
+          </h2>
+          {repoGenerationStatus === "idle" && (
+            <button
+              type="button"
+              onClick={handleGenerateRepo}
+              className="w-full px-6 py-3 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 transition-colors"
+            >
+              Generate Project Files on Server
+            </button>
+          )}
+          {repoGenerationStatus === "generating" && (
+            <div className="flex items-center justify-center text-indigo-600 my-4">
+              <LoadingSpinner />{" "}
+              <span className="ml-2">Generating repository structure...</span>
+            </div>
+          )}
+          {repoGenerationStatus === "success" && (
+            <div className="my-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+              <p className="font-bold">Success!</p>
+              <p>{repoGenerationMessage}</p>
+              <p className="text-xs mt-1">
+                Note: Project files created on the server's file system.
+              </p>
+            </div>
+          )}
+          {repoGenerationStatus === "error" && (
+            <div className="my-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              <p className="font-bold">Error!</p>
+              <p>{repoGenerationMessage}</p>
+            </div>
+          )}
+          {(repoGenerationStatus === "success" ||
+            repoGenerationStatus === "error") &&
+            repoGenerationStatus !== "generating" && (
+              <button
+                type="button"
+                onClick={handleGenerateRepo}
+                disabled={repoGenerationStatus === "generating"}
+                className="mt-2 w-full px-6 py-2 border border-indigo-500 text-indigo-600 font-semibold rounded-md hover:bg-indigo-50 disabled:opacity-50"
+              >
+                {repoGenerationStatus === "generating"
+                  ? "Generating..."
+                  : "Re-generate Project Files"}
+              </button>
+            )}
+        </div>
+
         <button
           type="button"
           onClick={handleResetForm}
@@ -971,60 +1046,89 @@ const MultiStepBRDForm: React.FC = () => {
     );
   }
 
-  // Otherwise, show the form.
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white shadow-lg rounded-lg my-10">
-      <div className="mb-6">
-        <div className="w-full bg-slate-200 rounded-full h-2.5">
-          <div
-            className="bg-sky-600 h-2.5 rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${(currentStep / totalSteps) * 100}%` }}
-          ></div>
+    <Card className="w-full max-w-4xl mx-auto my-10">
+      <CardHeader>
+        <CardTitle>Create a Business Requirements Document</CardTitle>
+        <CardDescription>
+          Fill out the form below, or generate a BRD from a text description.
+        </CardDescription>
+        <div className="flex space-x-2 pt-4">
+          <Button
+            onClick={() => setCreationMode("form")}
+            variant={creationMode === "form" ? "default" : "outline"}
+          >
+            Use Form
+          </Button>
+          <Button
+            onClick={() => setCreationMode("text")}
+            variant={creationMode === "text" ? "default" : "outline"}
+          >
+            Generate from Text
+          </Button>
         </div>
-        <p className="text-center text-sm text-slate-600 mt-2">
-          Step {currentStep} of {totalSteps}
-        </p>
-      </div>
+      </CardHeader>
+      <CardContent className="pt-6">
+        {creationMode === "text" ? (
+          <BRDFromTextGenerator onBrdGenerated={onBrdGenerated} />
+        ) : (
+          <>
+            <div className="mb-6">
+              <div className="w-full bg-slate-200 rounded-full h-2.5">
+                <div
+                  className="bg-sky-600 h-2.5 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+                ></div>
+              </div>
+              <p className="text-center text-sm text-slate-600 mt-2">
+                Step {currentStep} of {totalSteps}
+              </p>
+            </div>
 
-      <form onSubmit={handleSubmit}>
-        {renderStep()}
-        <div className="mt-8 flex justify-between items-center">
-          <div>
-            {currentStep > 1 && (
-              <button
-                type="button"
-                onClick={prevStep}
-                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-md hover:bg-slate-50"
-              >
-                Previous
-              </button>
-            )}
-          </div>
-          <div>
-            {currentStep < totalSteps && (
-              <button
-                type="button"
-                onClick={nextStep}
-                className="px-6 py-2 bg-sky-600 text-white rounded-md hover:bg-sky-700"
-              >
-                Next
-              </button>
-            )}
-            {currentStep === totalSteps && (
-              <button
-                type="submit"
-                disabled={submissionStatus === "submitting"}
-                className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-slate-400"
-              >
-                {submissionStatus === "submitting"
-                  ? "Submitting..."
-                  : "Submit BRD"}
-              </button>
-            )}
-          </div>
-        </div>
-      </form>
-    </div>
+            <form onSubmit={handleSubmit}>
+              {renderStep()}
+              <div className="mt-8 flex justify-between items-center">
+                <div>
+                  {currentStep > 1 && (
+                    <button
+                      type="button"
+                      onClick={prevStep}
+                      className="px-6 py-2 border border-slate-300 text-slate-700 rounded-md hover:bg-slate-50"
+                    >
+                      Previous
+                    </button>
+                  )}
+                </div>
+                <div>
+                  {currentStep < totalSteps && (
+                    <button
+                      type="button"
+                      onClick={nextStep}
+                      className="px-6 py-2 bg-sky-600 text-white rounded-md hover:bg-sky-700"
+                    >
+                      Next
+                    </button>
+                  )}
+                  {currentStep === totalSteps && (
+                    <button
+                      type="submit"
+                      disabled={submissionStatus === "submitting"}
+                      className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-slate-400"
+                    >
+                      {submissionStatus === "submitting" ? (
+                        <LoadingSpinner />
+                      ) : (
+                        "Submit BRD & Enhance"
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </form>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 
