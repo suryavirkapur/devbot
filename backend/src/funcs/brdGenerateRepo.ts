@@ -5,7 +5,8 @@ import { BRDCreatePayload, BRDCreatePayloadSchema } from "../types/brd";
 import { exec as callbackExec } from "child_process";
 import util from "util";
 import { openai } from "@ai-sdk/openai";
-import { generateObject, generateText } from "ai";
+import { generateObject } from "ai";
+import { z } from "zod";
 
 const exec = util.promisify(callbackExec);
 
@@ -23,6 +24,25 @@ const ensureDirectoryExists = async (dirPath: string) => {
     console.log(`Directory created: ${dirPath}`);
   }
 };
+
+const FileGenerationInfoSchema = z.object({
+  path: z
+    .string()
+    .describe(
+      "The full path of the file to be created, relative to the project root."
+    ),
+  description: z
+    .string()
+    .describe(
+      "A detailed description of the code or content that should be in this file."
+    ),
+});
+
+const ProjectStructureWithDescriptionsSchema = z.object({
+  files: z
+    .array(FileGenerationInfoSchema)
+    .describe("An array of files to be generated for the project."),
+});
 
 export const generateRepo = async (req: Request, res: Response) => {
   console.log("Received repository generation request:", req.body);
@@ -69,28 +89,23 @@ export const generateRepo = async (req: Request, res: Response) => {
     }
     // Work on Project Structure
 
-    const result = await generateText({
-    model: openai("gpt-4o-2024-08-06", {
-      structuredOutputs: true,
-    }),
-    prompt: `Generate a project structure for the following project description: ${JSON.stringify(
-      brdData,
-      null,
-      2
-    )}`,
+    const { object: projectStructure } = await generateObject({
+      model: openai("gpt-4o-2024-08-06", {
+        structuredOutputs: true,
+      }),
+      schema: ProjectStructureWithDescriptionsSchema,
+      prompt: `Generate a project structure with a detailed description for each file's content based on the following project description. This structure will be used to generate each file. Project description: ${JSON.stringify(
+        brdData,
+        null,
+        2
+      )}`,
     });
 
-    console.log("--- Project Structure ---");
-    console.log(result.text);
-    console.log("--- End of Project Structure ---");
+    console.log("--- Project Structure with Descriptions ---");
+    console.log(JSON.stringify(projectStructure, null, 2));
+    console.log("--- End of Project Structure with Descriptions ---");
 
     await fs.mkdir(projectPath, { recursive: true });
-
-    const brdString = JSON.stringify(brdData);
-    const escapedBrdString = brdString.replace(/'/g, "'\\''");
-
-    const command = `codex -a auto-edit --quiet '${escapedBrdString} ${result.text} Do not ask me anything just do it on your own.' `;
-    console.log(`Executing codex auto-edit in ${projectPath}`);
 
     if (!process.env.OPENAI_API_KEY) {
       console.warn(
@@ -98,22 +113,39 @@ export const generateRepo = async (req: Request, res: Response) => {
       );
     }
 
-    const { stdout, stderr } = await exec(command, {
-      cwd: projectPath,
-      env: {
-        ...process.env,
-      },
+    const brdString = JSON.stringify(brdData);
+
+    const generationPromises = projectStructure.files.map((fileInfo) => {
+      const prompt = `Create the file '${fileInfo.path}'. The file should contain code that does the following: "${fileInfo.description}". The overall project context is: ${brdString}. Create the file and its content. Do not ask for confirmation.`;
+      const escapedPrompt = prompt.replace(/'/g, "'\\''");
+
+      const command = `codex -a auto-edit --quiet '${escapedPrompt}'`;
+
+      console.log(`Executing codex auto-edit for ${fileInfo.path}`);
+
+      return exec(command, {
+        cwd: projectPath,
+        env: { ...process.env },
+      });
     });
 
-    console.log(`Codex stdout:\n${stdout}`);
-    if (stderr) {
-      console.error(`Codex stderr:\n${stderr}`);
+    const results = await Promise.all(generationPromises);
+
+    const allStdout = results.map((r) => r.stdout).join("\n");
+    const allStderr = results
+      .map((r) => r.stderr)
+      .filter(Boolean)
+      .join("\n");
+
+    console.log(`Codex stdout:\n${allStdout}`);
+    if (allStderr) {
+      console.error(`Codex stderr:\n${allStderr}`);
     }
 
     res.status(201).json({
       message: `Project structure for '${brdData.projectName}' generated successfully via codex!`,
       path: projectPath,
-      details: stdout,
+      details: allStdout,
     });
   } catch (error: any) {
     console.error("Error generating repository structure:", error);
