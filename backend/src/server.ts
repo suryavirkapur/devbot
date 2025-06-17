@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { brdCreate } from "./funcs/brdCreate";
 import { brdCreateFromText } from "./funcs/brdCreateFromText";
 import { generateRepo } from "./funcs/brdGenerateRepo";
+
 // import { brdCreateFromPdf } from "./funcs/brdPDFCreate";
 // import { multerUpload } from "./utils/store";
 
@@ -28,6 +29,8 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err.stack);
   res.status(500).send("Something broke!");
 });
+
+// main();
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

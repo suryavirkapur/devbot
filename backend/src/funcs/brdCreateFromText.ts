@@ -1,10 +1,13 @@
-import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
-import { BRDCreatePayloadSchema, BRDTextCreatePayloadSchema } from "../types/brd";
+import {
+  BRDCreatePayloadSchema,
+  BRDTextCreatePayloadSchema,
+} from "../types/brd";
 
 import { v4 as uuid } from "uuid";
 
 import { Request, Response } from "express";
+import openai, { AZURE_OPENAI_DEPLOYMENT_NAME } from "../openai";
 
 export const brdCreateFromText = async (req: Request, res: Response) => {
   console.log("Received BRD from text submission attempt:", req.body);
@@ -23,12 +26,11 @@ export const brdCreateFromText = async (req: Request, res: Response) => {
 
   try {
     const { object: brdData } = await generateObject({
-      model: openai("gpt-4o-2024-08-06", {
+      model: openai(AZURE_OPENAI_DEPLOYMENT_NAME, {
         structuredOutputs: true,
       }),
       schemaName: "BRD",
-      schemaDescription:
-        "Schema for a Business Requirements Document (BRD)",
+      schemaDescription: "Schema for a Business Requirements Document (BRD)",
       schema: BRDCreatePayloadSchema,
       prompt: `Generate a structured Business Requirements Document (BRD) from the following business information. Fill out all the fields of the BRD schema based on the provided text. \n\nBusiness Information:\n${businessInfo}`,
     });
@@ -55,4 +57,4 @@ export const brdCreateFromText = async (req: Request, res: Response) => {
       error: error instanceof Error ? error.message : String(error),
     });
   }
-}; 
+};

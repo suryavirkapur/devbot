@@ -1,10 +1,10 @@
-import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { BRDCreatePayloadSchema } from "../types/brd";
 
 import { v4 as uuid } from "uuid";
 
 import { Request, Response } from "express";
+import openai, { AZURE_OPENAI_DEPLOYMENT_NAME } from "../openai";
 
 export const brdCreate = async (req: Request, res: Response) => {
   console.log("Received BRD submission attempt:", req.body);
@@ -32,7 +32,7 @@ export const brdCreate = async (req: Request, res: Response) => {
   console.log(JSON.stringify(newBRD, null, 2));
   console.log("-------------------------------------------");
   const result = await generateObject({
-    model: openai("gpt-4o-2024-08-06", {
+    model: openai(AZURE_OPENAI_DEPLOYMENT_NAME, {
       structuredOutputs: true,
     }),
     schemaName: "BRD",
